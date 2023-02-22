@@ -28,7 +28,22 @@ func AddFavorite(ctx context.Context, uid int64, vid int64) (*interaction.Favori
 		StatusMsg:  resp.BaseResp.StatusMsg,
 	}, nil
 }
-
+func CommentAction(ctx context.Context, uid int64, vid int64, req interaction.CommentReq) (*interaction.CommentResp, error) {
+	resp, err := CommentClient.CommentMethod(ctx, &comment.CommentReq{
+		UserId:      uid,
+		VideoId:     vid,
+		ActionType:  req.ActionType,
+		CommentText: req.CommentText,
+		CommentId:   req.CommentID,
+	})
+	if err != nil {
+		return nil, errno.RPCErr
+	}
+	return &interaction.CommentResp{
+		StatusCode: resp.StatusCode,
+		StatusMsg:  &resp.StatusMsg,
+	}, nil
+}
 func DeleteFavorite(ctx context.Context, uid int64, vid int64) (*interaction.FavoriteResp, error) {
 	resp, err := FavoriteClient.FavoriteMethod(ctx, &favorite.FavoriteReq{
 		UserId:     uid,
@@ -49,7 +64,7 @@ func GetFavoriteList(ctx context.Context, uid int64) (favorites *interaction.Fav
 		UserId: uid,
 	})
 	if err != nil {
-		return nil, errno.RPCErr.WithMessage(err.Error())
+		return nil, err
 	}
 	favoriteIdList := favoriteListRes.VideoIdList
 	videosResp, err := Videoclient.GetVideoSetByIdSetMethod(
@@ -57,7 +72,7 @@ func GetFavoriteList(ctx context.Context, uid int64) (favorites *interaction.Fav
 			IdSet: favoriteIdList,
 		})
 	if err != nil {
-		return nil, errno.RPCErr.WithMessage(err.Error())
+		return nil, err
 	}
 	videos := videosResp.VideoSet
 	videoIdList := make([]int64, 0)
@@ -65,6 +80,10 @@ func GetFavoriteList(ctx context.Context, uid int64) (favorites *interaction.Fav
 	for _, v := range videos {
 		videoIdList = append(videoIdList, v.Id)
 		authorIdList = append(authorIdList, v.AuthorId)
+	}
+
+	if err != nil {
+		return nil, err
 	}
 	resp, err := Userclient.GetUserSetByIdSetMethod(ctx, &usermicro.GetUserSetByIdSetReq{
 		IdSet: authorIdList,
@@ -79,12 +98,30 @@ func GetFavoriteList(ctx context.Context, uid int64) (favorites *interaction.Fav
 	}
 	isFollowMap, err := GetIsFollowMapByUserIdSet(uid, authorIdList)
 	if err != nil {
-		return nil, errno.RPCErr.WithMessage(err.Error())
+		return nil, err
 	}
 	return &interaction.FavoriteListResp{
 		StatusCode: favoriteListRes.BaseResp.StatusCode,
 		StatusMsg:  favoriteListRes.BaseResp.StatusMsg,
 		VideoList:  pack.Videos(videos, authors, isFavoriteMap, isFollowMap),
+	}, nil
+}
+func GetCommentList(ctx context.Context, uid int64, req interaction.CommentListReq) (favorites *interaction.CommentListResp, err error) {
+	resp, err := CommentClient.CommentListMethod(ctx, &comment.CommentListReq{
+		UserId:  uid,
+		VideoId: req.VideoID,
+	})
+	if err != nil {
+		return nil, errno.RPCErr
+	}
+	comments, err := pack.Commentlist(resp.CommentList)
+	if err != nil {
+		return nil, errno.RPCErr
+	}
+	return &interaction.CommentListResp{
+		StatusCode:  resp.StatusCode,
+		StatusMsg:   &resp.StatusMsg,
+		CommentList: comments,
 	}, nil
 }
 
